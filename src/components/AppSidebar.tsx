@@ -1,14 +1,7 @@
-import { Link, useLocation } from "@tanstack/react-router";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { supabase } from "@/integrations/supabase/client";
 import {
-  LayoutDashboard,
-  FileText,
-  ShoppingCart,
-  Package,
-  Users,
-  Wallet,
-  RotateCcw,
-  BarChart3,
-  Store,
+  LayoutDashboard, FileText, ShoppingCart, Package, Users, Wallet, RotateCcw, BarChart3, Store, LogOut,
 } from "lucide-react";
 
 const navItems = [
@@ -24,7 +17,12 @@ const navItems = [
 
 export function AppSidebar() {
   const location = useLocation();
+  const navigate = useNavigate();
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate({ to: '/login' });
+  };
   return (
     <aside className="fixed top-0 right-0 h-screen w-64 bg-sidebar text-sidebar-foreground flex flex-col z-50">
       <div className="p-6 border-b border-sidebar-border">
@@ -58,7 +56,10 @@ export function AppSidebar() {
         })}
       </nav>
       <div className="p-4 border-t border-sidebar-border">
-        <p className="text-xs text-center text-sidebar-foreground/40">نظام محاسبة v1.0</p>
+        <button onClick={handleLogout} className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium w-full text-sidebar-foreground/70 hover:bg-destructive/10 hover:text-destructive transition-all duration-200">
+          <LogOut className="w-5 h-5" />
+          <span>تسجيل الخروج</span>
+        </button>
       </div>
     </aside>
   );

@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageLayout } from "@/components/PageLayout";
-import { getProducts, getCustomers, getInvoices, saveInvoice, type InvoiceItem, type Product } from "@/lib/store";
-import { useState, useEffect } from "react";
+import { getProducts, getInvoices, saveInvoice, type InvoiceItem, type Product, type Invoice } from "@/lib/store";
+import { useState, useEffect, useCallback } from "react";
 import { Plus, FileText, Trash2 } from "lucide-react";
 
 export const Route = createFileRoute("/sales")({
@@ -9,7 +9,7 @@ export const Route = createFileRoute("/sales")({
 });
 
 function SalesPage() {
-  const [invoices, setInvoices] = useState(getInvoices('sale'));
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [items, setItems] = useState<InvoiceItem[]>([]);
@@ -19,11 +19,18 @@ function SalesPage() {
   const [notes, setNotes] = useState("");
   const [selectedProduct, setSelectedProduct] = useState("");
   const [quantity, setQuantity] = useState(1);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    setProducts(getProducts());
-    setInvoices(getInvoices('sale'));
+  const loadData = useCallback(async () => {
+    try {
+      const [p, inv] = await Promise.all([getProducts(), getInvoices('sale')]);
+      setProducts(p);
+      setInvoices(inv);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
   }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   const total = items.reduce((sum, i) => sum + i.total, 0);
   const netTotal = total - discount;
@@ -32,67 +39,39 @@ function SalesPage() {
     const product = products.find(p => p.id === selectedProduct);
     if (!product || quantity <= 0) return;
     setItems([...items, {
-      productId: product.id,
-      productName: product.name,
-      quantity,
-      price: product.sellPrice,
-      total: product.sellPrice * quantity,
+      productId: product.id, productName: product.name, quantity,
+      price: product.sellPrice, total: product.sellPrice * quantity,
     }]);
     setSelectedProduct("");
     setQuantity(1);
   };
 
-  const removeItem = (idx: number) => {
-    setItems(items.filter((_, i) => i !== idx));
-  };
+  const removeItem = (idx: number) => setItems(items.filter((_, i) => i !== idx));
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (items.length === 0) return;
-    saveInvoice({
-      type: 'sale',
-      date: new Date().toLocaleDateString('ar-EG'),
-      customerName,
-      items,
-      total,
-      discount,
-      netTotal,
-      paid,
-      notes,
+    await saveInvoice({
+      type: 'sale', date: new Date().toISOString().split('T')[0],
+      customerName, items, total, discount, netTotal, paid, notes,
     });
-    setInvoices(getInvoices('sale'));
-    setProducts(getProducts());
-    setItems([]);
-    setCustomerName("");
-    setDiscount(0);
-    setPaid(0);
-    setNotes("");
-    setShowForm(false);
+    await loadData();
+    setItems([]); setCustomerName(""); setDiscount(0); setPaid(0); setNotes(""); setShowForm(false);
   };
 
   const formatCurrency = (n: number) => n.toLocaleString('ar-EG') + ' ج.م';
 
   return (
-    <PageLayout
-      title="فواتير البيع"
-      subtitle={`${invoices.length} فاتورة`}
-      actions={
-        <button onClick={() => setShowForm(true)} className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors">
-          <Plus className="w-4 h-4" /> فاتورة جديدة
-        </button>
-      }
+    <PageLayout title="فواتير البيع" subtitle={`${invoices.length} فاتورة`}
+      actions={<button onClick={() => setShowForm(true)} className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors"><Plus className="w-4 h-4" /> فاتورة جديدة</button>}
     >
-      {/* New Invoice Modal */}
       {showForm && (
         <div className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-sm flex items-center justify-center overflow-y-auto py-8" onClick={() => setShowForm(false)}>
           <div className="bg-card rounded-2xl border border-border p-8 w-full max-w-2xl shadow-2xl" onClick={e => e.stopPropagation()}>
             <h2 className="font-heading text-xl font-bold mb-6">فاتورة بيع جديدة</h2>
-
             <div className="mb-4">
               <label className="text-sm text-muted-foreground mb-1 block">اسم العميل</label>
               <input value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="عميل نقدي" className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none" />
             </div>
-
-            {/* Add Item */}
             <div className="flex gap-3 mb-4">
               <select value={selectedProduct} onChange={e => setSelectedProduct(e.target.value)} className="flex-1 px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none">
                 <option value="">اختر منتج...</option>
@@ -101,16 +80,11 @@ function SalesPage() {
               <input type="number" value={quantity} onChange={e => setQuantity(+e.target.value)} min={1} className="w-20 px-3 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none text-center" />
               <button onClick={addItem} className="bg-accent text-accent-foreground px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-accent/90 transition-colors">إضافة</button>
             </div>
-
-            {/* Items List */}
             {items.length > 0 && (
               <div className="bg-muted/30 rounded-xl p-4 mb-4 space-y-2">
                 {items.map((item, idx) => (
                   <div key={idx} className="flex items-center justify-between bg-card rounded-lg p-3">
-                    <div>
-                      <span className="font-medium text-sm">{item.productName}</span>
-                      <span className="text-muted-foreground text-xs mr-2">× {item.quantity}</span>
-                    </div>
+                    <div><span className="font-medium text-sm">{item.productName}</span><span className="text-muted-foreground text-xs mr-2">× {item.quantity}</span></div>
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-semibold">{formatCurrency(item.total)}</span>
                       <button onClick={() => removeItem(idx)} className="text-destructive p-1"><Trash2 className="w-4 h-4" /></button>
@@ -119,32 +93,16 @@ function SalesPage() {
                 ))}
               </div>
             )}
-
             <div className="grid grid-cols-3 gap-4 mb-4">
-              <div>
-                <label className="text-sm text-muted-foreground mb-1 block">الإجمالي</label>
-                <div className="px-4 py-2.5 rounded-xl bg-muted font-semibold">{formatCurrency(total)}</div>
-              </div>
-              <div>
-                <label className="text-sm text-muted-foreground mb-1 block">الخصم</label>
-                <input type="number" value={discount} onChange={e => setDiscount(+e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none" />
-              </div>
-              <div>
-                <label className="text-sm text-muted-foreground mb-1 block">المدفوع</label>
-                <input type="number" value={paid} onChange={e => setPaid(+e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none" />
-              </div>
+              <div><label className="text-sm text-muted-foreground mb-1 block">الإجمالي</label><div className="px-4 py-2.5 rounded-xl bg-muted font-semibold">{formatCurrency(total)}</div></div>
+              <div><label className="text-sm text-muted-foreground mb-1 block">الخصم</label><input type="number" value={discount} onChange={e => setDiscount(+e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none" /></div>
+              <div><label className="text-sm text-muted-foreground mb-1 block">المدفوع</label><input type="number" value={paid} onChange={e => setPaid(+e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none" /></div>
             </div>
-
             <div className="bg-primary/5 rounded-xl p-4 mb-4 flex justify-between items-center">
               <span className="font-heading font-bold text-lg">الصافي</span>
               <span className="font-heading font-bold text-xl text-primary">{formatCurrency(netTotal)}</span>
             </div>
-
-            <div className="mb-6">
-              <label className="text-sm text-muted-foreground mb-1 block">ملاحظات</label>
-              <textarea value={notes} onChange={e => setNotes(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none resize-none" rows={2} />
-            </div>
-
+            <div className="mb-6"><label className="text-sm text-muted-foreground mb-1 block">ملاحظات</label><textarea value={notes} onChange={e => setNotes(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none resize-none" rows={2} /></div>
             <div className="flex gap-3">
               <button onClick={handleSave} className="flex-1 bg-primary text-primary-foreground py-3 rounded-xl font-medium hover:bg-primary/90 transition-colors">حفظ الفاتورة</button>
               <button onClick={() => setShowForm(false)} className="flex-1 bg-secondary text-secondary-foreground py-3 rounded-xl font-medium hover:bg-secondary/80 transition-colors">إلغاء</button>
@@ -153,27 +111,24 @@ function SalesPage() {
         </div>
       )}
 
-      {/* Invoices List */}
       <div className="bg-card rounded-2xl border border-border overflow-hidden">
         <table className="w-full">
-          <thead>
-            <tr className="bg-muted/50 border-b border-border">
-              <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">رقم الفاتورة</th>
-              <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">التاريخ</th>
-              <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">العميل</th>
-              <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">الإجمالي</th>
-              <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">الخصم</th>
-              <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">الصافي</th>
-              <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">المدفوع</th>
-            </tr>
-          </thead>
+          <thead><tr className="bg-muted/50 border-b border-border">
+            <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">رقم الفاتورة</th>
+            <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">التاريخ</th>
+            <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">العميل</th>
+            <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">الإجمالي</th>
+            <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">الخصم</th>
+            <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">الصافي</th>
+            <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">المدفوع</th>
+          </tr></thead>
           <tbody>
             {invoices.length === 0 ? (
               <tr><td colSpan={7} className="text-center py-12 text-muted-foreground">
                 <FileText className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
-                لا توجد فواتير بعد
+                {loading ? 'جاري التحميل...' : 'لا توجد فواتير بعد'}
               </td></tr>
-            ) : invoices.slice().reverse().map(inv => (
+            ) : invoices.map(inv => (
               <tr key={inv.id} className="border-b border-border hover:bg-muted/30 transition-colors">
                 <td className="px-6 py-4 text-sm font-mono">{inv.id.slice(0, 8)}</td>
                 <td className="px-6 py-4 text-sm">{inv.date}</td>

@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageLayout } from "@/components/PageLayout";
 import { getExpenses, saveExpense, deleteExpense, type Expense } from "@/lib/store";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Plus, Trash2, Wallet } from "lucide-react";
 
 export const Route = createFileRoute("/expenses")({
@@ -12,33 +12,33 @@ function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ date: new Date().toISOString().split('T')[0], category: "", description: "", amount: 0 });
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => { setExpenses(getExpenses()); }, []);
+  const loadData = useCallback(async () => {
+    try { setExpenses(await getExpenses()); } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   const total = expenses.reduce((sum, e) => sum + e.amount, 0);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.description || form.amount <= 0) return;
-    saveExpense(form);
-    setExpenses(getExpenses());
+    await saveExpense(form);
+    await loadData();
     setForm({ date: new Date().toISOString().split('T')[0], category: "", description: "", amount: 0 });
     setShowForm(false);
   };
 
-  const handleDelete = (id: string) => {
-    deleteExpense(id);
-    setExpenses(getExpenses());
+  const handleDelete = async (id: string) => {
+    await deleteExpense(id);
+    await loadData();
   };
 
   return (
-    <PageLayout
-      title="المصروفات"
-      subtitle={`إجمالي: ${total.toLocaleString('ar-EG')} ج.م`}
-      actions={
-        <button onClick={() => setShowForm(true)} className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors">
-          <Plus className="w-4 h-4" /> إضافة مصروف
-        </button>
-      }
+    <PageLayout title="المصروفات" subtitle={`إجمالي: ${total.toLocaleString('ar-EG')} ج.م`}
+      actions={<button onClick={() => setShowForm(true)} className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors"><Plus className="w-4 h-4" /> إضافة مصروف</button>}
     >
       {showForm && (
         <div className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-sm flex items-center justify-center" onClick={() => setShowForm(false)}>
@@ -69,8 +69,8 @@ function ExpensesPage() {
           </tr></thead>
           <tbody>
             {expenses.length === 0 ? (
-              <tr><td colSpan={5} className="text-center py-12 text-muted-foreground"><Wallet className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />لا توجد مصروفات</td></tr>
-            ) : expenses.slice().reverse().map(e => (
+              <tr><td colSpan={5} className="text-center py-12 text-muted-foreground"><Wallet className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />{loading ? 'جاري التحميل...' : 'لا توجد مصروفات'}</td></tr>
+            ) : expenses.map(e => (
               <tr key={e.id} className="border-b border-border hover:bg-muted/30 transition-colors">
                 <td className="px-6 py-4 text-sm">{e.date}</td>
                 <td className="px-6 py-4 text-sm"><span className="bg-accent/10 text-accent px-3 py-1 rounded-lg text-xs font-medium">{e.category}</span></td>
