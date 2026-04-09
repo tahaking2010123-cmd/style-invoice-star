@@ -1,5 +1,8 @@
-import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
+import { Outlet, Link, createRootRoute, HeadContent, Scripts, useNavigate } from "@tanstack/react-router";
 import { AppSidebar } from "@/components/AppSidebar";
+import { supabase } from "@/integrations/supabase/client";
+import { useState, useEffect } from "react";
+import type { User } from "@supabase/supabase-js";
 import appCss from "../styles.css?url";
 
 function NotFoundComponent() {
@@ -51,6 +54,48 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function RootComponent() {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!loading && !user) {
+      const isLoginPage = window.location.pathname === '/login';
+      if (!isLoginPage) {
+        navigate({ to: '/login' });
+      }
+    }
+  }, [user, loading, navigate]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground text-sm">جاري التحميل...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Outlet />;
+  }
+
   return (
     <>
       <AppSidebar />
