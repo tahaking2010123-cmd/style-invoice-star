@@ -14,7 +14,195 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      customers: {
+        Row: {
+          address: string
+          balance: number
+          created_at: string
+          id: string
+          name: string
+          phone: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string
+          balance?: number
+          created_at?: string
+          id?: string
+          name: string
+          phone?: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string
+          balance?: number
+          created_at?: string
+          id?: string
+          name?: string
+          phone?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      expenses: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string
+          date: string
+          description: string
+          id: string
+        }
+        Insert: {
+          amount?: number
+          category?: string
+          created_at?: string
+          date?: string
+          description?: string
+          id?: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string
+          date?: string
+          description?: string
+          id?: string
+        }
+        Relationships: []
+      }
+      invoice_items: {
+        Row: {
+          created_at: string
+          id: string
+          invoice_id: string
+          price: number
+          product_id: string | null
+          product_name: string
+          quantity: number
+          total: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          invoice_id: string
+          price?: number
+          product_id?: string | null
+          product_name: string
+          quantity?: number
+          total?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          invoice_id?: string
+          price?: number
+          product_id?: string | null
+          product_name?: string
+          quantity?: number
+          total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_items_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoices: {
+        Row: {
+          created_at: string
+          customer_name: string
+          date: string
+          discount: number
+          id: string
+          net_total: number
+          notes: string
+          paid: number
+          total: number
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_name?: string
+          date?: string
+          discount?: number
+          id?: string
+          net_total?: number
+          notes?: string
+          paid?: number
+          total?: number
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_name?: string
+          date?: string
+          discount?: number
+          id?: string
+          net_total?: number
+          notes?: string
+          paid?: number
+          total?: number
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      products: {
+        Row: {
+          barcode: string
+          buy_price: number
+          category: string
+          color: string | null
+          created_at: string
+          id: string
+          name: string
+          sell_price: number
+          size: string | null
+          stock: number
+          updated_at: string
+        }
+        Insert: {
+          barcode: string
+          buy_price?: number
+          category?: string
+          color?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          sell_price?: number
+          size?: string | null
+          stock?: number
+          updated_at?: string
+        }
+        Update: {
+          barcode?: string
+          buy_price?: number
+          category?: string
+          color?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          sell_price?: number
+          size?: string | null
+          stock?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
