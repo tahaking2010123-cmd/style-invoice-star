@@ -1,37 +1,47 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageLayout } from "@/components/PageLayout";
 import { getStats, getInvoices, getExpenses } from "@/lib/store";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { TrendingUp, TrendingDown, DollarSign, BarChart3 } from "lucide-react";
 
 export const Route = createFileRoute("/reports")({
   component: ReportsPage,
 });
 
+type Stats = Awaited<ReturnType<typeof getStats>>;
+
 function ReportsPage() {
-  const [stats, setStats] = useState(getStats());
+  const [stats, setStats] = useState<Stats | null>(null);
   const [salesByDate, setSalesByDate] = useState<Record<string, number>>({});
   const [expensesByCategory, setExpensesByCategory] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    setStats(getStats());
-
-    const sales = getInvoices('sale');
-    const byDate: Record<string, number> = {};
-    sales.forEach(s => { byDate[s.date] = (byDate[s.date] || 0) + s.netTotal; });
-    setSalesByDate(byDate);
-
-    const expenses = getExpenses();
-    const byCat: Record<string, number> = {};
-    expenses.forEach(e => { byCat[e.category || 'أخرى'] = (byCat[e.category || 'أخرى'] || 0) + e.amount; });
-    setExpensesByCategory(byCat);
+  const loadData = useCallback(async () => {
+    try {
+      const [s, sales, expenses] = await Promise.all([getStats(), getInvoices('sale'), getExpenses()]);
+      setStats(s);
+      const byDate: Record<string, number> = {};
+      sales.forEach(s => { byDate[s.date] = (byDate[s.date] || 0) + s.netTotal; });
+      setSalesByDate(byDate);
+      const byCat: Record<string, number> = {};
+      expenses.forEach(e => { byCat[e.category || 'أخرى'] = (byCat[e.category || 'أخرى'] || 0) + e.amount; });
+      setExpensesByCategory(byCat);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
   }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   const formatCurrency = (n: number) => n.toLocaleString('ar-EG') + ' ج.م';
 
+  if (loading || !stats) return (
+    <PageLayout title="التقارير المالية" subtitle="جاري التحميل...">
+      <div className="flex items-center justify-center py-20 text-muted-foreground">جاري تحميل البيانات...</div>
+    </PageLayout>
+  );
+
   return (
     <PageLayout title="التقارير المالية" subtitle="ملخص شامل للأداء المالي">
-      {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <div className="bg-card rounded-2xl border border-border p-6">
           <div className="flex items-center gap-3 mb-2">
@@ -64,7 +74,6 @@ function ReportsPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Sales by Date */}
         <div className="bg-card rounded-2xl border border-border p-6">
           <h2 className="font-heading text-lg font-semibold mb-4 flex items-center gap-2"><BarChart3 className="w-5 h-5 text-primary" />المبيعات حسب التاريخ</h2>
           {Object.keys(salesByDate).length === 0 ? (
@@ -81,7 +90,6 @@ function ReportsPage() {
           )}
         </div>
 
-        {/* Expenses by Category */}
         <div className="bg-card rounded-2xl border border-border p-6">
           <h2 className="font-heading text-lg font-semibold mb-4 flex items-center gap-2"><BarChart3 className="w-5 h-5 text-destructive" />المصروفات حسب التصنيف</h2>
           {Object.keys(expensesByCategory).length === 0 ? (

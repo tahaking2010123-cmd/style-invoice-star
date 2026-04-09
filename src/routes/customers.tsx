@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageLayout } from "@/components/PageLayout";
 import { getCustomers, saveCustomer, deleteCustomer, type Customer } from "@/lib/store";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Plus, Trash2, Users, Search } from "lucide-react";
 
 export const Route = createFileRoute("/customers")({
@@ -13,33 +13,33 @@ function CustomersPage() {
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", phone: "", address: "", balance: 0 });
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => { setCustomers(getCustomers()); }, []);
+  const loadData = useCallback(async () => {
+    try { setCustomers(await getCustomers()); } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   const filtered = customers.filter(c => c.name.includes(search) || c.phone.includes(search));
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name) return;
-    saveCustomer(form);
-    setCustomers(getCustomers());
+    await saveCustomer(form);
+    await loadData();
     setForm({ name: "", phone: "", address: "", balance: 0 });
     setShowForm(false);
   };
 
-  const handleDelete = (id: string) => {
-    deleteCustomer(id);
-    setCustomers(getCustomers());
+  const handleDelete = async (id: string) => {
+    await deleteCustomer(id);
+    await loadData();
   };
 
   return (
-    <PageLayout
-      title="العملاء"
-      subtitle={`${customers.length} عميل`}
-      actions={
-        <button onClick={() => setShowForm(true)} className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors">
-          <Plus className="w-4 h-4" /> إضافة عميل
-        </button>
-      }
+    <PageLayout title="العملاء" subtitle={`${customers.length} عميل`}
+      actions={<button onClick={() => setShowForm(true)} className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors"><Plus className="w-4 h-4" /> إضافة عميل</button>}
     >
       <div className="relative mb-6">
         <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -75,7 +75,7 @@ function CustomersPage() {
           </tr></thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={5} className="text-center py-12 text-muted-foreground"><Users className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />لا يوجد عملاء</td></tr>
+              <tr><td colSpan={5} className="text-center py-12 text-muted-foreground"><Users className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />{loading ? 'جاري التحميل...' : 'لا يوجد عملاء'}</td></tr>
             ) : filtered.map(c => (
               <tr key={c.id} className="border-b border-border hover:bg-muted/30 transition-colors">
                 <td className="px-6 py-4 text-sm font-medium">{c.name}</td>

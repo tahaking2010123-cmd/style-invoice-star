@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageLayout } from "@/components/PageLayout";
-import { getProducts, getInvoices, saveInvoice, type InvoiceItem, type Product } from "@/lib/store";
-import { useState, useEffect } from "react";
+import { getProducts, getInvoices, saveInvoice, type InvoiceItem, type Product, type Invoice } from "@/lib/store";
+import { useState, useEffect, useCallback } from "react";
 import { Plus, RotateCcw, Trash2 } from "lucide-react";
 
 export const Route = createFileRoute("/returns")({
@@ -9,7 +9,7 @@ export const Route = createFileRoute("/returns")({
 });
 
 function ReturnsPage() {
-  const [returns, setReturns] = useState(getInvoices('return'));
+  const [returns, setReturns] = useState<Invoice[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [items, setItems] = useState<InvoiceItem[]>([]);
@@ -17,11 +17,17 @@ function ReturnsPage() {
   const [notes, setNotes] = useState("");
   const [selectedProduct, setSelectedProduct] = useState("");
   const [quantity, setQuantity] = useState(1);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    setProducts(getProducts());
-    setReturns(getInvoices('return'));
+  const loadData = useCallback(async () => {
+    try {
+      const [p, r] = await Promise.all([getProducts(), getInvoices('return')]);
+      setProducts(p); setReturns(r);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
   }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   const total = items.reduce((sum, i) => sum + i.total, 0);
 
@@ -29,32 +35,21 @@ function ReturnsPage() {
     const product = products.find(p => p.id === selectedProduct);
     if (!product || quantity <= 0) return;
     setItems([...items, { productId: product.id, productName: product.name, quantity, price: product.sellPrice, total: product.sellPrice * quantity }]);
-    setSelectedProduct("");
-    setQuantity(1);
+    setSelectedProduct(""); setQuantity(1);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (items.length === 0) return;
-    saveInvoice({ type: 'return', date: new Date().toLocaleDateString('ar-EG'), customerName, items, total, discount: 0, netTotal: total, paid: total, notes });
-    setReturns(getInvoices('return'));
-    setProducts(getProducts());
-    setItems([]);
-    setCustomerName("");
-    setNotes("");
-    setShowForm(false);
+    await saveInvoice({ type: 'return', date: new Date().toISOString().split('T')[0], customerName, items, total, discount: 0, netTotal: total, paid: total, notes });
+    await loadData();
+    setItems([]); setCustomerName(""); setNotes(""); setShowForm(false);
   };
 
   const formatCurrency = (n: number) => n.toLocaleString('ar-EG') + ' ج.م';
 
   return (
-    <PageLayout
-      title="المرتجعات"
-      subtitle={`${returns.length} مرتجع`}
-      actions={
-        <button onClick={() => setShowForm(true)} className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors">
-          <Plus className="w-4 h-4" /> مرتجع جديد
-        </button>
-      }
+    <PageLayout title="المرتجعات" subtitle={`${returns.length} مرتجع`}
+      actions={<button onClick={() => setShowForm(true)} className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors"><Plus className="w-4 h-4" /> مرتجع جديد</button>}
     >
       {showForm && (
         <div className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-sm flex items-center justify-center" onClick={() => setShowForm(false)}>
@@ -105,8 +100,8 @@ function ReturnsPage() {
           </tr></thead>
           <tbody>
             {returns.length === 0 ? (
-              <tr><td colSpan={4} className="text-center py-12 text-muted-foreground"><RotateCcw className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />لا توجد مرتجعات</td></tr>
-            ) : returns.slice().reverse().map(r => (
+              <tr><td colSpan={4} className="text-center py-12 text-muted-foreground"><RotateCcw className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />{loading ? 'جاري التحميل...' : 'لا توجد مرتجعات'}</td></tr>
+            ) : returns.map(r => (
               <tr key={r.id} className="border-b border-border hover:bg-muted/30 transition-colors">
                 <td className="px-6 py-4 text-sm">{r.date}</td>
                 <td className="px-6 py-4 text-sm font-medium">{r.customerName || 'نقدي'}</td>

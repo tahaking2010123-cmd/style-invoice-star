@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageLayout } from "@/components/PageLayout";
-import { getProducts, getInvoices, saveInvoice, type InvoiceItem, type Product } from "@/lib/store";
-import { useState, useEffect } from "react";
+import { getProducts, getInvoices, saveInvoice, type InvoiceItem, type Product, type Invoice } from "@/lib/store";
+import { useState, useEffect, useCallback } from "react";
 import { Plus, FileText, Trash2 } from "lucide-react";
 
 export const Route = createFileRoute("/purchases")({
@@ -9,7 +9,7 @@ export const Route = createFileRoute("/purchases")({
 });
 
 function PurchasesPage() {
-  const [invoices, setInvoices] = useState(getInvoices('purchase'));
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [items, setItems] = useState<InvoiceItem[]>([]);
@@ -19,11 +19,17 @@ function PurchasesPage() {
   const [notes, setNotes] = useState("");
   const [selectedProduct, setSelectedProduct] = useState("");
   const [quantity, setQuantity] = useState(1);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    setProducts(getProducts());
-    setInvoices(getInvoices('purchase'));
+  const loadData = useCallback(async () => {
+    try {
+      const [p, inv] = await Promise.all([getProducts(), getInvoices('purchase')]);
+      setProducts(p); setInvoices(inv);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
   }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   const total = items.reduce((sum, i) => sum + i.total, 0);
   const netTotal = total - discount;
@@ -31,57 +37,30 @@ function PurchasesPage() {
   const addItem = () => {
     const product = products.find(p => p.id === selectedProduct);
     if (!product || quantity <= 0) return;
-    setItems([...items, {
-      productId: product.id,
-      productName: product.name,
-      quantity,
-      price: product.buyPrice,
-      total: product.buyPrice * quantity,
-    }]);
-    setSelectedProduct("");
-    setQuantity(1);
+    setItems([...items, { productId: product.id, productName: product.name, quantity, price: product.buyPrice, total: product.buyPrice * quantity }]);
+    setSelectedProduct(""); setQuantity(1);
   };
 
   const removeItem = (idx: number) => setItems(items.filter((_, i) => i !== idx));
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (items.length === 0) return;
-    saveInvoice({
-      type: 'purchase',
-      date: new Date().toLocaleDateString('ar-EG'),
-      customerName: supplierName,
-      items, total, discount, netTotal, paid, notes,
-    });
-    setInvoices(getInvoices('purchase'));
-    setProducts(getProducts());
-    setItems([]);
-    setSupplierName("");
-    setDiscount(0);
-    setPaid(0);
-    setNotes("");
-    setShowForm(false);
+    await saveInvoice({ type: 'purchase', date: new Date().toISOString().split('T')[0], customerName: supplierName, items, total, discount, netTotal, paid, notes });
+    await loadData();
+    setItems([]); setSupplierName(""); setDiscount(0); setPaid(0); setNotes(""); setShowForm(false);
   };
 
   const formatCurrency = (n: number) => n.toLocaleString('ar-EG') + ' ج.م';
 
   return (
-    <PageLayout
-      title="فواتير المشتريات"
-      subtitle={`${invoices.length} فاتورة`}
-      actions={
-        <button onClick={() => setShowForm(true)} className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors">
-          <Plus className="w-4 h-4" /> فاتورة شراء جديدة
-        </button>
-      }
+    <PageLayout title="فواتير المشتريات" subtitle={`${invoices.length} فاتورة`}
+      actions={<button onClick={() => setShowForm(true)} className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors"><Plus className="w-4 h-4" /> فاتورة شراء جديدة</button>}
     >
       {showForm && (
         <div className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-sm flex items-center justify-center overflow-y-auto py-8" onClick={() => setShowForm(false)}>
           <div className="bg-card rounded-2xl border border-border p-8 w-full max-w-2xl shadow-2xl" onClick={e => e.stopPropagation()}>
             <h2 className="font-heading text-xl font-bold mb-6">فاتورة شراء جديدة</h2>
-            <div className="mb-4">
-              <label className="text-sm text-muted-foreground mb-1 block">اسم المورد</label>
-              <input value={supplierName} onChange={e => setSupplierName(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none" />
-            </div>
+            <div className="mb-4"><label className="text-sm text-muted-foreground mb-1 block">اسم المورد</label><input value={supplierName} onChange={e => setSupplierName(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none" /></div>
             <div className="flex gap-3 mb-4">
               <select value={selectedProduct} onChange={e => setSelectedProduct(e.target.value)} className="flex-1 px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none">
                 <option value="">اختر منتج...</option>
@@ -132,8 +111,8 @@ function PurchasesPage() {
           </tr></thead>
           <tbody>
             {invoices.length === 0 ? (
-              <tr><td colSpan={5} className="text-center py-12 text-muted-foreground"><FileText className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />لا توجد فواتير مشتريات</td></tr>
-            ) : invoices.slice().reverse().map(inv => (
+              <tr><td colSpan={5} className="text-center py-12 text-muted-foreground"><FileText className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />{loading ? 'جاري التحميل...' : 'لا توجد فواتير مشتريات'}</td></tr>
+            ) : invoices.map(inv => (
               <tr key={inv.id} className="border-b border-border hover:bg-muted/30 transition-colors">
                 <td className="px-6 py-4 text-sm font-mono">{inv.id.slice(0, 8)}</td>
                 <td className="px-6 py-4 text-sm">{inv.date}</td>
