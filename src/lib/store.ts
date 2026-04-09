@@ -79,15 +79,15 @@ export async function saveProduct(p: Omit<Product, 'id' | 'barcode'>): Promise<P
 }
 
 export async function updateProduct(id: string, updates: Partial<Product>): Promise<void> {
-  const dbUpdates: Record<string, unknown> = {};
-  if (updates.name !== undefined) dbUpdates.name = updates.name;
-  if (updates.category !== undefined) dbUpdates.category = updates.category;
-  if (updates.buyPrice !== undefined) dbUpdates.buy_price = updates.buyPrice;
-  if (updates.sellPrice !== undefined) dbUpdates.sell_price = updates.sellPrice;
-  if (updates.stock !== undefined) dbUpdates.stock = updates.stock;
-  if (updates.size !== undefined) dbUpdates.size = updates.size;
-  if (updates.color !== undefined) dbUpdates.color = updates.color;
-  const { error } = await supabase.from('products').update(dbUpdates).eq('id', id);
+  const { error } = await supabase.from('products').update({
+    ...(updates.name !== undefined && { name: updates.name }),
+    ...(updates.category !== undefined && { category: updates.category }),
+    ...(updates.buyPrice !== undefined && { buy_price: updates.buyPrice }),
+    ...(updates.sellPrice !== undefined && { sell_price: updates.sellPrice }),
+    ...(updates.stock !== undefined && { stock: updates.stock }),
+    ...(updates.size !== undefined && { size: updates.size }),
+    ...(updates.color !== undefined && { color: updates.color }),
+  }).eq('id', id);
   if (error) throw error;
 }
 
