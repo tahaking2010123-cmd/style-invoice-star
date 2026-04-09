@@ -1,14 +1,7 @@
-import { Link, useLocation } from "@tanstack/react-router";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { supabase } from "@/integrations/supabase/client";
 import {
-  LayoutDashboard,
-  FileText,
-  ShoppingCart,
-  Package,
-  Users,
-  Wallet,
-  RotateCcw,
-  BarChart3,
-  Store,
+  LayoutDashboard, FileText, ShoppingCart, Package, Users, Wallet, RotateCcw, BarChart3, Store, LogOut,
 } from "lucide-react";
 
 const navItems = [
