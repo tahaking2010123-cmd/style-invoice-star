@@ -31,7 +31,7 @@ export interface InvoiceItem {
 
 export interface Invoice {
   id: string;
-  type: 'sale' | 'purchase' | 'return';
+  type: 'sale' | 'purchase' | 'return' | 'sale_return' | 'purchase_return';
   date: string;
   customerName: string;
   items: InvoiceItem[];
