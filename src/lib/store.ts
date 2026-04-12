@@ -31,7 +31,7 @@ export interface InvoiceItem {
 
 export interface Invoice {
   id: string;
-  type: 'sale' | 'purchase' | 'return';
+  type: 'sale' | 'purchase' | 'return' | 'sale_return' | 'purchase_return';
   date: string;
   customerName: string;
   items: InvoiceItem[];
@@ -173,7 +173,8 @@ export async function saveInvoice(inv: Omit<Invoice, 'id'>): Promise<Invoice> {
       let newStock = product.stock;
       if (inv.type === 'sale') newStock -= item.quantity;
       else if (inv.type === 'purchase') newStock += item.quantity;
-      else if (inv.type === 'return') newStock += item.quantity;
+      else if (inv.type === 'sale_return') newStock += item.quantity;
+      else if (inv.type === 'purchase_return') newStock -= item.quantity;
       await supabase.from('products').update({ stock: newStock }).eq('id', item.productId);
     }
   }

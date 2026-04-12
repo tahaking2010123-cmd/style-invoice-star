@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageLayout } from "@/components/PageLayout";
-import { getCustomers, saveCustomer, deleteCustomer, type Customer } from "@/lib/store";
+import { getCustomers, saveCustomer, updateCustomer, deleteCustomer, type Customer } from "@/lib/store";
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Trash2, Users, Search } from "lucide-react";
+import { Plus, Trash2, Users, Search, Pencil } from "lucide-react";
 
 export const Route = createFileRoute("/customers")({
   component: CustomersPage,
@@ -12,6 +12,7 @@ function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", phone: "", address: "", balance: 0 });
   const [loading, setLoading] = useState(true);
 
@@ -24,11 +25,28 @@ function CustomersPage() {
 
   const filtered = customers.filter(c => c.name.includes(search) || c.phone.includes(search));
 
+  const openAdd = () => {
+    setEditingId(null);
+    setForm({ name: "", phone: "", address: "", balance: 0 });
+    setShowForm(true);
+  };
+
+  const openEdit = (c: Customer) => {
+    setEditingId(c.id);
+    setForm({ name: c.name, phone: c.phone, address: c.address, balance: c.balance });
+    setShowForm(true);
+  };
+
   const handleSave = async () => {
     if (!form.name) return;
-    await saveCustomer(form);
+    if (editingId) {
+      await updateCustomer(editingId, form);
+    } else {
+      await saveCustomer(form);
+    }
     await loadData();
     setForm({ name: "", phone: "", address: "", balance: 0 });
+    setEditingId(null);
     setShowForm(false);
   };
 
@@ -39,7 +57,7 @@ function CustomersPage() {
 
   return (
     <PageLayout title="العملاء" subtitle={`${customers.length} عميل`}
-      actions={<button onClick={() => setShowForm(true)} className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors"><Plus className="w-4 h-4" /> إضافة عميل</button>}
+      actions={<button onClick={openAdd} className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors"><Plus className="w-4 h-4" /> إضافة عميل</button>}
     >
       <div className="relative mb-6">
         <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -49,7 +67,7 @@ function CustomersPage() {
       {showForm && (
         <div className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-sm flex items-center justify-center" onClick={() => setShowForm(false)}>
           <div className="bg-card rounded-2xl border border-border p-8 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h2 className="font-heading text-xl font-bold mb-6">إضافة عميل جديد</h2>
+            <h2 className="font-heading text-xl font-bold mb-6">{editingId ? 'تعديل العميل' : 'إضافة عميل جديد'}</h2>
             <div className="space-y-4">
               <div><label className="text-sm text-muted-foreground mb-1 block">الاسم</label><input value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none" /></div>
               <div><label className="text-sm text-muted-foreground mb-1 block">رقم الهاتف</label><input value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none" /></div>
@@ -82,7 +100,10 @@ function CustomersPage() {
                 <td className="px-6 py-4 text-sm">{c.phone}</td>
                 <td className="px-6 py-4 text-sm">{c.address}</td>
                 <td className="px-6 py-4 text-sm"><span className={c.balance > 0 ? 'text-destructive font-semibold' : 'text-success font-semibold'}>{c.balance.toLocaleString('ar-EG')} ج.م</span></td>
-                <td className="px-6 py-4"><button onClick={() => handleDelete(c.id)} className="text-destructive hover:bg-destructive/10 p-2 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button></td>
+                <td className="px-6 py-4 flex gap-2">
+                  <button onClick={() => openEdit(c)} className="text-primary hover:bg-primary/10 p-2 rounded-lg transition-colors"><Pencil className="w-4 h-4" /></button>
+                  <button onClick={() => handleDelete(c.id)} className="text-destructive hover:bg-destructive/10 p-2 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
+                </td>
               </tr>
             ))}
           </tbody>

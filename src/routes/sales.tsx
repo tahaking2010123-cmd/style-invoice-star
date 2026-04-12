@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageLayout } from "@/components/PageLayout";
-import { getProducts, getInvoices, saveInvoice, type InvoiceItem, type Product, type Invoice } from "@/lib/store";
+import { getProducts, getCustomers, getInvoices, saveInvoice, type InvoiceItem, type Product, type Invoice, type Customer } from "@/lib/store";
 import { useState, useEffect, useCallback } from "react";
 import { Plus, FileText, Trash2 } from "lucide-react";
 
@@ -11,21 +11,22 @@ export const Route = createFileRoute("/sales")({
 function SalesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [items, setItems] = useState<InvoiceItem[]>([]);
-  const [customerName, setCustomerName] = useState("");
+  const [customerId, setCustomerId] = useState("");
   const [discount, setDiscount] = useState(0);
   const [paid, setPaid] = useState(0);
   const [notes, setNotes] = useState("");
   const [selectedProduct, setSelectedProduct] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   const loadData = useCallback(async () => {
     try {
-      const [p, inv] = await Promise.all([getProducts(), getInvoices('sale')]);
-      setProducts(p);
-      setInvoices(inv);
+      const [p, inv, c] = await Promise.all([getProducts(), getInvoices('sale'), getCustomers()]);
+      setProducts(p); setInvoices(inv); setCustomers(c);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   }, []);
@@ -38,24 +39,23 @@ function SalesPage() {
   const addItem = () => {
     const product = products.find(p => p.id === selectedProduct);
     if (!product || quantity <= 0) return;
-    setItems([...items, {
-      productId: product.id, productName: product.name, quantity,
-      price: product.sellPrice, total: product.sellPrice * quantity,
-    }]);
-    setSelectedProduct("");
-    setQuantity(1);
+    setItems([...items, { productId: product.id, productName: product.name, quantity, price: product.sellPrice, total: product.sellPrice * quantity }]);
+    setSelectedProduct(""); setQuantity(1);
   };
 
   const removeItem = (idx: number) => setItems(items.filter((_, i) => i !== idx));
 
   const handleSave = async () => {
-    if (items.length === 0) return;
+    if (!customerId) { setError("يجب اختيار العميل"); return; }
+    if (items.length === 0) { setError("يجب إضافة منتج واحد على الأقل"); return; }
+    setError("");
+    const customer = customers.find(c => c.id === customerId);
     await saveInvoice({
       type: 'sale', date: new Date().toISOString().split('T')[0],
-      customerName, items, total, discount, netTotal, paid, notes,
+      customerName: customer?.name || '', items, total, discount, netTotal, paid, notes,
     });
     await loadData();
-    setItems([]); setCustomerName(""); setDiscount(0); setPaid(0); setNotes(""); setShowForm(false);
+    setItems([]); setCustomerId(""); setDiscount(0); setPaid(0); setNotes(""); setShowForm(false);
   };
 
   const formatCurrency = (n: number) => n.toLocaleString('ar-EG') + ' ج.م';
@@ -68,9 +68,13 @@ function SalesPage() {
         <div className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-sm flex items-center justify-center overflow-y-auto py-8" onClick={() => setShowForm(false)}>
           <div className="bg-card rounded-2xl border border-border p-8 w-full max-w-2xl shadow-2xl" onClick={e => e.stopPropagation()}>
             <h2 className="font-heading text-xl font-bold mb-6">فاتورة بيع جديدة</h2>
+            {error && <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-xl mb-4">{error}</div>}
             <div className="mb-4">
-              <label className="text-sm text-muted-foreground mb-1 block">اسم العميل</label>
-              <input value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="عميل نقدي" className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none" />
+              <label className="text-sm text-muted-foreground mb-1 block">اسم العميل <span className="text-destructive">*</span></label>
+              <select value={customerId} onChange={e => setCustomerId(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none">
+                <option value="">اختر العميل...</option>
+                {customers.map(c => <option key={c.id} value={c.id}>{c.name} - {c.phone}</option>)}
+              </select>
             </div>
             <div className="flex gap-3 mb-4">
               <select value={selectedProduct} onChange={e => setSelectedProduct(e.target.value)} className="flex-1 px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none">
@@ -124,10 +128,7 @@ function SalesPage() {
           </tr></thead>
           <tbody>
             {invoices.length === 0 ? (
-              <tr><td colSpan={7} className="text-center py-12 text-muted-foreground">
-                <FileText className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
-                {loading ? 'جاري التحميل...' : 'لا توجد فواتير بعد'}
-              </td></tr>
+              <tr><td colSpan={7} className="text-center py-12 text-muted-foreground"><FileText className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />{loading ? 'جاري التحميل...' : 'لا توجد فواتير بعد'}</td></tr>
             ) : invoices.map(inv => (
               <tr key={inv.id} className="border-b border-border hover:bg-muted/30 transition-colors">
                 <td className="px-6 py-4 text-sm font-mono">{inv.id.slice(0, 8)}</td>
