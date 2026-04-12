@@ -176,7 +176,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          barcode: string
+          barcode?: string
           buy_price?: number
           category?: string
           color?: string | null
