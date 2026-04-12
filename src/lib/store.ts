@@ -66,9 +66,8 @@ export async function getProducts(): Promise<Product[]> {
 }
 
 export async function saveProduct(p: Omit<Product, 'id' | 'barcode'>): Promise<Product> {
-  const barcode = generateBarcode();
   const { data, error } = await supabase.from('products').insert({
-    name: p.name, barcode, category: p.category,
+    name: p.name, category: p.category || '',
     buy_price: p.buyPrice, sell_price: p.sellPrice, stock: p.stock,
     size: p.size || null, color: p.color || null,
   }).select().single();

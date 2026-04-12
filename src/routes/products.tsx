@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageLayout } from "@/components/PageLayout";
-import { getProducts, saveProduct, deleteProduct, type Product } from "@/lib/store";
+import { getProducts, saveProduct, updateProduct, deleteProduct, type Product } from "@/lib/store";
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Trash2, Search, Barcode } from "lucide-react";
+import { Plus, Trash2, Search, Barcode, Pencil } from "lucide-react";
 
 export const Route = createFileRoute("/products")({
   component: ProductsPage,
@@ -12,7 +12,8 @@ function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: "", category: "", buyPrice: 0, sellPrice: 0, stock: 0, size: "", color: "" });
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [form, setForm] = useState({ name: "", buyPrice: 0, sellPrice: 0, stock: 0 });
   const [loading, setLoading] = useState(true);
 
   const loadData = useCallback(async () => {
@@ -23,15 +24,34 @@ function ProductsPage() {
   useEffect(() => { loadData(); }, [loadData]);
 
   const filtered = products.filter(p =>
-    p.name.includes(search) || p.barcode.includes(search) || p.category.includes(search)
+    p.name.includes(search) || p.barcode.includes(search)
   );
+
+  const openAdd = () => {
+    setEditingProduct(null);
+    setForm({ name: "", buyPrice: 0, sellPrice: 0, stock: 0 });
+    setShowForm(true);
+  };
+
+  const openEdit = (p: Product) => {
+    setEditingProduct(p);
+    setForm({ name: p.name, buyPrice: p.buyPrice, sellPrice: p.sellPrice, stock: p.stock });
+    setShowForm(true);
+  };
 
   const handleSave = async () => {
     if (!form.name) return;
-    await saveProduct(form);
+    if (editingProduct) {
+      await updateProduct(editingProduct.id, {
+        name: form.name, buyPrice: form.buyPrice, sellPrice: form.sellPrice, stock: form.stock,
+      });
+    } else {
+      await saveProduct({ name: form.name, category: "", buyPrice: form.buyPrice, sellPrice: form.sellPrice, stock: form.stock });
+    }
     await loadData();
-    setForm({ name: "", category: "", buyPrice: 0, sellPrice: 0, stock: 0, size: "", color: "" });
+    setForm({ name: "", buyPrice: 0, sellPrice: 0, stock: 0 });
     setShowForm(false);
+    setEditingProduct(null);
   };
 
   const handleDelete = async (id: string) => {
@@ -41,7 +61,7 @@ function ProductsPage() {
 
   return (
     <PageLayout title="المنتجات والمخزون" subtitle={`${products.length} منتج`}
-      actions={<button onClick={() => setShowForm(true)} className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors"><Plus className="w-4 h-4" /> إضافة منتج</button>}
+      actions={<button onClick={openAdd} className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors"><Plus className="w-4 h-4" /> إضافة منتج</button>}
     >
       <div className="relative mb-6">
         <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -49,21 +69,38 @@ function ProductsPage() {
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-sm flex items-center justify-center" onClick={() => setShowForm(false)}>
+        <div className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-sm flex items-center justify-center" onClick={() => { setShowForm(false); setEditingProduct(null); }}>
           <div className="bg-card rounded-2xl border border-border p-8 w-full max-w-lg shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h2 className="font-heading text-xl font-bold mb-6">إضافة منتج جديد</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2"><label className="text-sm text-muted-foreground mb-1 block">اسم المنتج</label><input value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none" /></div>
-              <div><label className="text-sm text-muted-foreground mb-1 block">التصنيف</label><input value={form.category} onChange={e => setForm({...form, category: e.target.value})} placeholder="رجالي، حريمي، أطفال" className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none" /></div>
-              <div><label className="text-sm text-muted-foreground mb-1 block">المقاس</label><input value={form.size} onChange={e => setForm({...form, size: e.target.value})} placeholder="S, M, L, XL" className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none" /></div>
-              <div><label className="text-sm text-muted-foreground mb-1 block">اللون</label><input value={form.color} onChange={e => setForm({...form, color: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none" /></div>
-              <div><label className="text-sm text-muted-foreground mb-1 block">سعر الشراء</label><input type="number" value={form.buyPrice} onChange={e => setForm({...form, buyPrice: +e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none" /></div>
-              <div><label className="text-sm text-muted-foreground mb-1 block">سعر البيع</label><input type="number" value={form.sellPrice} onChange={e => setForm({...form, sellPrice: +e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none" /></div>
-              <div><label className="text-sm text-muted-foreground mb-1 block">الكمية</label><input type="number" value={form.stock} onChange={e => setForm({...form, stock: +e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none" /></div>
+            <h2 className="font-heading text-xl font-bold mb-6">{editingProduct ? 'تعديل منتج' : 'إضافة منتج جديد'}</h2>
+            <div className="grid gap-4">
+              {editingProduct && (
+                <div>
+                  <label className="text-sm text-muted-foreground mb-1 block">الباركود</label>
+                  <input value={editingProduct.barcode} disabled className="w-full px-4 py-2.5 rounded-xl border border-input bg-muted text-muted-foreground cursor-not-allowed" />
+                </div>
+              )}
+              <div>
+                <label className="text-sm text-muted-foreground mb-1 block">اسم المنتج</label>
+                <input value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none" />
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="text-sm text-muted-foreground mb-1 block">سعر الشراء</label>
+                  <input type="number" value={form.buyPrice} onChange={e => setForm({...form, buyPrice: +e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none" />
+                </div>
+                <div>
+                  <label className="text-sm text-muted-foreground mb-1 block">سعر البيع</label>
+                  <input type="number" value={form.sellPrice} onChange={e => setForm({...form, sellPrice: +e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none" />
+                </div>
+                <div>
+                  <label className="text-sm text-muted-foreground mb-1 block">الكمية</label>
+                  <input type="number" value={form.stock} onChange={e => setForm({...form, stock: +e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none" />
+                </div>
+              </div>
             </div>
             <div className="flex gap-3 mt-6">
               <button onClick={handleSave} className="flex-1 bg-primary text-primary-foreground py-3 rounded-xl font-medium hover:bg-primary/90 transition-colors">حفظ</button>
-              <button onClick={() => setShowForm(false)} className="flex-1 bg-secondary text-secondary-foreground py-3 rounded-xl font-medium hover:bg-secondary/80 transition-colors">إلغاء</button>
+              <button onClick={() => { setShowForm(false); setEditingProduct(null); }} className="flex-1 bg-secondary text-secondary-foreground py-3 rounded-xl font-medium hover:bg-secondary/80 transition-colors">إلغاء</button>
             </div>
           </div>
         </div>
@@ -75,7 +112,6 @@ function ProductsPage() {
             <thead><tr className="bg-muted/50 border-b border-border">
               <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">الباركود</th>
               <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">المنتج</th>
-              <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">التصنيف</th>
               <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">سعر الشراء</th>
               <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">سعر البيع</th>
               <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">المخزون</th>
@@ -83,16 +119,18 @@ function ProductsPage() {
             </tr></thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-12 text-muted-foreground">{loading ? 'جاري التحميل...' : 'لا توجد منتجات'}</td></tr>
+                <tr><td colSpan={6} className="text-center py-12 text-muted-foreground">{loading ? 'جاري التحميل...' : 'لا توجد منتجات'}</td></tr>
               ) : filtered.map(p => (
                 <tr key={p.id} className="border-b border-border hover:bg-muted/30 transition-colors">
                   <td className="px-6 py-4 text-sm font-mono flex items-center gap-2"><Barcode className="w-4 h-4 text-muted-foreground" />{p.barcode}</td>
-                  <td className="px-6 py-4 text-sm font-medium">{p.name}{p.size && <span className="text-muted-foreground mr-1">({p.size})</span>}{p.color && <span className="text-muted-foreground mr-1">- {p.color}</span>}</td>
-                  <td className="px-6 py-4 text-sm">{p.category}</td>
+                  <td className="px-6 py-4 text-sm font-medium">{p.name}</td>
                   <td className="px-6 py-4 text-sm">{p.buyPrice.toLocaleString('ar-EG')} ج.م</td>
                   <td className="px-6 py-4 text-sm">{p.sellPrice.toLocaleString('ar-EG')} ج.م</td>
                   <td className="px-6 py-4 text-sm"><span className={`px-3 py-1 rounded-lg text-xs font-semibold ${p.stock <= 5 ? 'bg-destructive/10 text-destructive' : 'bg-success/10 text-success'}`}>{p.stock}</span></td>
-                  <td className="px-6 py-4"><button onClick={() => handleDelete(p.id)} className="text-destructive hover:bg-destructive/10 p-2 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button></td>
+                  <td className="px-6 py-4 flex items-center gap-1">
+                    <button onClick={() => openEdit(p)} className="text-primary hover:bg-primary/10 p-2 rounded-lg transition-colors"><Pencil className="w-4 h-4" /></button>
+                    <button onClick={() => handleDelete(p.id)} className="text-destructive hover:bg-destructive/10 p-2 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
+                  </td>
                 </tr>
               ))}
             </tbody>
