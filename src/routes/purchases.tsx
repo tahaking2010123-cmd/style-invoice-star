@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageLayout } from "@/components/PageLayout";
-import { getProducts, getInvoices, saveInvoice, type InvoiceItem, type Product, type Invoice } from "@/lib/store";
+import { getProducts, getCustomers, getInvoices, saveInvoice, type InvoiceItem, type Product, type Invoice, type Customer } from "@/lib/store";
 import { useState, useEffect, useCallback } from "react";
 import { Plus, FileText, Trash2 } from "lucide-react";
 
@@ -11,20 +11,22 @@ export const Route = createFileRoute("/purchases")({
 function PurchasesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [items, setItems] = useState<InvoiceItem[]>([]);
-  const [supplierName, setSupplierName] = useState("");
+  const [supplierId, setSupplierId] = useState("");
   const [discount, setDiscount] = useState(0);
   const [paid, setPaid] = useState(0);
   const [notes, setNotes] = useState("");
   const [selectedProduct, setSelectedProduct] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   const loadData = useCallback(async () => {
     try {
-      const [p, inv] = await Promise.all([getProducts(), getInvoices('purchase')]);
-      setProducts(p); setInvoices(inv);
+      const [p, inv, c] = await Promise.all([getProducts(), getInvoices('purchase'), getCustomers()]);
+      setProducts(p); setInvoices(inv); setCustomers(c);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   }, []);
@@ -44,10 +46,13 @@ function PurchasesPage() {
   const removeItem = (idx: number) => setItems(items.filter((_, i) => i !== idx));
 
   const handleSave = async () => {
-    if (items.length === 0) return;
-    await saveInvoice({ type: 'purchase', date: new Date().toISOString().split('T')[0], customerName: supplierName, items, total, discount, netTotal, paid, notes });
+    if (!supplierId) { setError("يجب اختيار المورد"); return; }
+    if (items.length === 0) { setError("يجب إضافة منتج واحد على الأقل"); return; }
+    setError("");
+    const supplier = customers.find(c => c.id === supplierId);
+    await saveInvoice({ type: 'purchase', date: new Date().toISOString().split('T')[0], customerName: supplier?.name || '', items, total, discount, netTotal, paid, notes });
     await loadData();
-    setItems([]); setSupplierName(""); setDiscount(0); setPaid(0); setNotes(""); setShowForm(false);
+    setItems([]); setSupplierId(""); setDiscount(0); setPaid(0); setNotes(""); setShowForm(false);
   };
 
   const formatCurrency = (n: number) => n.toLocaleString('ar-EG') + ' ج.م';
@@ -60,7 +65,14 @@ function PurchasesPage() {
         <div className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-sm flex items-center justify-center overflow-y-auto py-8" onClick={() => setShowForm(false)}>
           <div className="bg-card rounded-2xl border border-border p-8 w-full max-w-2xl shadow-2xl" onClick={e => e.stopPropagation()}>
             <h2 className="font-heading text-xl font-bold mb-6">فاتورة شراء جديدة</h2>
-            <div className="mb-4"><label className="text-sm text-muted-foreground mb-1 block">اسم المورد</label><input value={supplierName} onChange={e => setSupplierName(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none" /></div>
+            {error && <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-xl mb-4">{error}</div>}
+            <div className="mb-4">
+              <label className="text-sm text-muted-foreground mb-1 block">اسم المورد <span className="text-destructive">*</span></label>
+              <select value={supplierId} onChange={e => setSupplierId(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none">
+                <option value="">اختر المورد...</option>
+                {customers.map(c => <option key={c.id} value={c.id}>{c.name} - {c.phone}</option>)}
+              </select>
+            </div>
             <div className="flex gap-3 mb-4">
               <select value={selectedProduct} onChange={e => setSelectedProduct(e.target.value)} className="flex-1 px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none">
                 <option value="">اختر منتج...</option>
