@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PageLayout } from "@/components/PageLayout";
 import { getCustomers, saveCustomer, updateCustomer, deleteCustomer, type Customer } from "@/lib/store";
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Trash2, Users, Search, Pencil } from "lucide-react";
+import { Plus, Trash2, Users, Search, Pencil, Truck, ShoppingBag } from "lucide-react";
 
 export const Route = createFileRoute("/customers")({
   component: CustomersPage,
@@ -13,8 +13,9 @@ function CustomersPage() {
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", phone: "", address: "", balance: 0 });
+  const [form, setForm] = useState({ name: "", phone: "", address: "", balance: 0, type: 'buyer' as 'buyer' | 'supplier' });
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'buyer' | 'supplier'>('buyer');
 
   const loadData = useCallback(async () => {
     try { setCustomers(await getCustomers()); } catch (e) { console.error(e); }
@@ -23,17 +24,22 @@ function CustomersPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  const filtered = customers.filter(c => c.name.includes(search) || c.phone.includes(search));
+  const filtered = customers
+    .filter(c => c.type === activeTab)
+    .filter(c => c.name.includes(search) || c.phone.includes(search));
+
+  const buyers = customers.filter(c => c.type === 'buyer');
+  const suppliers = customers.filter(c => c.type === 'supplier');
 
   const openAdd = () => {
     setEditingId(null);
-    setForm({ name: "", phone: "", address: "", balance: 0 });
+    setForm({ name: "", phone: "", address: "", balance: 0, type: activeTab });
     setShowForm(true);
   };
 
   const openEdit = (c: Customer) => {
     setEditingId(c.id);
-    setForm({ name: c.name, phone: c.phone, address: c.address, balance: c.balance });
+    setForm({ name: c.name, phone: c.phone, address: c.address, balance: c.balance, type: c.type });
     setShowForm(true);
   };
 
@@ -45,7 +51,7 @@ function CustomersPage() {
       await saveCustomer(form);
     }
     await loadData();
-    setForm({ name: "", phone: "", address: "", balance: 0 });
+    setForm({ name: "", phone: "", address: "", balance: 0, type: activeTab });
     setEditingId(null);
     setShowForm(false);
   };
@@ -55,10 +61,21 @@ function CustomersPage() {
     await loadData();
   };
 
+  const label = activeTab === 'buyer' ? 'عميل' : 'مورد';
+
   return (
-    <PageLayout title="العملاء" subtitle={`${customers.length} عميل`}
-      actions={<button onClick={openAdd} className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors"><Plus className="w-4 h-4" /> إضافة عميل</button>}
+    <PageLayout title="العملاء والموردين" subtitle={`${buyers.length} عميل · ${suppliers.length} مورد`}
+      actions={<button onClick={openAdd} className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors"><Plus className="w-4 h-4" /> إضافة {label}</button>}
     >
+      <div className="flex gap-2 mb-6">
+        <button onClick={() => setActiveTab('buyer')} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-colors ${activeTab === 'buyer' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}>
+          <ShoppingBag className="w-4 h-4" /> العملاء ({buyers.length})
+        </button>
+        <button onClick={() => setActiveTab('supplier')} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-colors ${activeTab === 'supplier' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}>
+          <Truck className="w-4 h-4" /> الموردين ({suppliers.length})
+        </button>
+      </div>
+
       <div className="relative mb-6">
         <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
         <input type="text" placeholder="بحث بالاسم أو رقم الهاتف..." value={search} onChange={e => setSearch(e.target.value)} className="w-full md:w-96 pr-12 pl-4 py-3 rounded-xl border border-input bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
@@ -67,8 +84,15 @@ function CustomersPage() {
       {showForm && (
         <div className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-sm flex items-center justify-center" onClick={() => setShowForm(false)}>
           <div className="bg-card rounded-2xl border border-border p-8 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h2 className="font-heading text-xl font-bold mb-6">{editingId ? 'تعديل العميل' : 'إضافة عميل جديد'}</h2>
+            <h2 className="font-heading text-xl font-bold mb-6">{editingId ? `تعديل ${label}` : `إضافة ${label} جديد`}</h2>
             <div className="space-y-4">
+              <div>
+                <label className="text-sm text-muted-foreground mb-1 block">النوع</label>
+                <select value={form.type} onChange={e => setForm({...form, type: e.target.value as 'buyer' | 'supplier'})} className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none">
+                  <option value="buyer">عميل (مشتري)</option>
+                  <option value="supplier">مورد</option>
+                </select>
+              </div>
               <div><label className="text-sm text-muted-foreground mb-1 block">الاسم</label><input value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none" /></div>
               <div><label className="text-sm text-muted-foreground mb-1 block">رقم الهاتف</label><input value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none" /></div>
               <div><label className="text-sm text-muted-foreground mb-1 block">العنوان</label><input value={form.address} onChange={e => setForm({...form, address: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none" /></div>
@@ -93,7 +117,7 @@ function CustomersPage() {
           </tr></thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={5} className="text-center py-12 text-muted-foreground"><Users className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />{loading ? 'جاري التحميل...' : 'لا يوجد عملاء'}</td></tr>
+              <tr><td colSpan={5} className="text-center py-12 text-muted-foreground"><Users className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />{loading ? 'جاري التحميل...' : `لا يوجد ${label}`}</td></tr>
             ) : filtered.map(c => (
               <tr key={c.id} className="border-b border-border hover:bg-muted/30 transition-colors">
                 <td className="px-6 py-4 text-sm font-medium">{c.name}</td>

@@ -22,6 +22,7 @@ export type Database = {
           id: string
           name: string
           phone: string
+          type: string
           updated_at: string
         }
         Insert: {
@@ -31,6 +32,7 @@ export type Database = {
           id?: string
           name: string
           phone?: string
+          type?: string
           updated_at?: string
         }
         Update: {
@@ -40,6 +42,7 @@ export type Database = {
           id?: string
           name?: string
           phone?: string
+          type?: string
           updated_at?: string
         }
         Relationships: []
@@ -122,6 +125,7 @@ export type Database = {
       invoices: {
         Row: {
           created_at: string
+          customer_id: string | null
           customer_name: string
           date: string
           discount: number
@@ -135,6 +139,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          customer_id?: string | null
           customer_name?: string
           date?: string
           discount?: number
@@ -148,6 +153,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          customer_id?: string | null
           customer_name?: string
           date?: string
           discount?: number
@@ -159,7 +165,15 @@ export type Database = {
           type?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "invoices_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       products: {
         Row: {

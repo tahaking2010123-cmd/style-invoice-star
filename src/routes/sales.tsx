@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageLayout } from "@/components/PageLayout";
-import { getProducts, getCustomers, getInvoices, saveInvoice, type InvoiceItem, type Product, type Invoice, type Customer } from "@/lib/store";
+import { getProducts, getCustomers, getInvoices, saveInvoice, updateInvoice, type InvoiceItem, type Product, type Invoice, type Customer } from "@/lib/store";
 import { useState, useEffect, useCallback } from "react";
-import { Plus, FileText, Trash2 } from "lucide-react";
+import { Plus, FileText, Trash2, Pencil } from "lucide-react";
 
 export const Route = createFileRoute("/sales")({
   component: SalesPage,
@@ -13,6 +13,7 @@ function SalesPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [customerId, setCustomerId] = useState("");
   const [discount, setDiscount] = useState(0);
@@ -25,7 +26,7 @@ function SalesPage() {
 
   const loadData = useCallback(async () => {
     try {
-      const [p, inv, c] = await Promise.all([getProducts(), getInvoices('sale'), getCustomers()]);
+      const [p, inv, c] = await Promise.all([getProducts(), getInvoices('sale'), getCustomers('buyer')]);
       setProducts(p); setInvoices(inv); setCustomers(c);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
@@ -45,29 +46,52 @@ function SalesPage() {
 
   const removeItem = (idx: number) => setItems(items.filter((_, i) => i !== idx));
 
+  const openNew = () => {
+    setEditingId(null);
+    setItems([]); setCustomerId(""); setDiscount(0); setPaid(0); setNotes(""); setError("");
+    setShowForm(true);
+  };
+
+  const openEdit = (inv: Invoice) => {
+    setEditingId(inv.id);
+    setItems(inv.items);
+    const customer = customers.find(c => c.name === inv.customerName);
+    setCustomerId(customer?.id || "");
+    setDiscount(inv.discount);
+    setPaid(inv.paid);
+    setNotes(inv.notes);
+    setError("");
+    setShowForm(true);
+  };
+
   const handleSave = async () => {
     if (!customerId) { setError("يجب اختيار العميل"); return; }
     if (items.length === 0) { setError("يجب إضافة منتج واحد على الأقل"); return; }
     setError("");
     const customer = customers.find(c => c.id === customerId);
-    await saveInvoice({
-      type: 'sale', date: new Date().toISOString().split('T')[0],
-      customerName: customer?.name || '', items, total, discount, netTotal, paid, notes,
-    });
+    const invoiceData = {
+      type: 'sale' as const, date: new Date().toISOString().split('T')[0],
+      customerId, customerName: customer?.name || '', items, total, discount, netTotal, paid, notes,
+    };
+    if (editingId) {
+      await updateInvoice(editingId, invoiceData);
+    } else {
+      await saveInvoice(invoiceData);
+    }
     await loadData();
-    setItems([]); setCustomerId(""); setDiscount(0); setPaid(0); setNotes(""); setShowForm(false);
+    setItems([]); setCustomerId(""); setDiscount(0); setPaid(0); setNotes(""); setEditingId(null); setShowForm(false);
   };
 
   const formatCurrency = (n: number) => n.toLocaleString('ar-EG') + ' ج.م';
 
   return (
     <PageLayout title="فواتير البيع" subtitle={`${invoices.length} فاتورة`}
-      actions={<button onClick={() => setShowForm(true)} className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors"><Plus className="w-4 h-4" /> فاتورة جديدة</button>}
+      actions={<button onClick={openNew} className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors"><Plus className="w-4 h-4" /> فاتورة جديدة</button>}
     >
       {showForm && (
         <div className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-sm flex items-center justify-center overflow-y-auto py-8" onClick={() => setShowForm(false)}>
           <div className="bg-card rounded-2xl border border-border p-8 w-full max-w-2xl shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h2 className="font-heading text-xl font-bold mb-6">فاتورة بيع جديدة</h2>
+            <h2 className="font-heading text-xl font-bold mb-6">{editingId ? 'تعديل فاتورة بيع' : 'فاتورة بيع جديدة'}</h2>
             {error && <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-xl mb-4">{error}</div>}
             <div className="mb-4">
               <label className="text-sm text-muted-foreground mb-1 block">اسم العميل <span className="text-destructive">*</span></label>
@@ -108,7 +132,7 @@ function SalesPage() {
             </div>
             <div className="mb-6"><label className="text-sm text-muted-foreground mb-1 block">ملاحظات</label><textarea value={notes} onChange={e => setNotes(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none resize-none" rows={2} /></div>
             <div className="flex gap-3">
-              <button onClick={handleSave} className="flex-1 bg-primary text-primary-foreground py-3 rounded-xl font-medium hover:bg-primary/90 transition-colors">حفظ الفاتورة</button>
+              <button onClick={handleSave} className="flex-1 bg-primary text-primary-foreground py-3 rounded-xl font-medium hover:bg-primary/90 transition-colors">{editingId ? 'تحديث الفاتورة' : 'حفظ الفاتورة'}</button>
               <button onClick={() => setShowForm(false)} className="flex-1 bg-secondary text-secondary-foreground py-3 rounded-xl font-medium hover:bg-secondary/80 transition-colors">إلغاء</button>
             </div>
           </div>
@@ -125,10 +149,11 @@ function SalesPage() {
             <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">الخصم</th>
             <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">الصافي</th>
             <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">المدفوع</th>
+            <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">تعديل</th>
           </tr></thead>
           <tbody>
             {invoices.length === 0 ? (
-              <tr><td colSpan={7} className="text-center py-12 text-muted-foreground"><FileText className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />{loading ? 'جاري التحميل...' : 'لا توجد فواتير بعد'}</td></tr>
+              <tr><td colSpan={8} className="text-center py-12 text-muted-foreground"><FileText className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />{loading ? 'جاري التحميل...' : 'لا توجد فواتير بعد'}</td></tr>
             ) : invoices.map(inv => (
               <tr key={inv.id} className="border-b border-border hover:bg-muted/30 transition-colors">
                 <td className="px-6 py-4 text-sm font-mono">{inv.id.slice(0, 8)}</td>
@@ -138,6 +163,7 @@ function SalesPage() {
                 <td className="px-6 py-4 text-sm">{formatCurrency(inv.discount)}</td>
                 <td className="px-6 py-4 text-sm font-semibold text-primary">{formatCurrency(inv.netTotal)}</td>
                 <td className="px-6 py-4 text-sm">{formatCurrency(inv.paid)}</td>
+                <td className="px-6 py-4"><button onClick={() => openEdit(inv)} className="text-primary hover:bg-primary/10 p-2 rounded-lg transition-colors"><Pencil className="w-4 h-4" /></button></td>
               </tr>
             ))}
           </tbody>

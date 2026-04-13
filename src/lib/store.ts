@@ -19,6 +19,7 @@ export interface Customer {
   phone: string;
   address: string;
   balance: number;
+  type: 'buyer' | 'supplier';
 }
 
 export interface InvoiceItem {
@@ -33,6 +34,7 @@ export interface Invoice {
   id: string;
   type: 'sale' | 'purchase' | 'return' | 'sale_return' | 'purchase_return';
   date: string;
+  customerId?: string;
   customerName: string;
   items: InvoiceItem[];
   total: number;
@@ -96,24 +98,34 @@ export async function deleteProduct(id: string): Promise<void> {
 }
 
 // ---- Customers ----
-export async function getCustomers(): Promise<Customer[]> {
-  const { data, error } = await supabase.from('customers').select('*').order('created_at', { ascending: false });
+export async function getCustomers(type?: 'buyer' | 'supplier'): Promise<Customer[]> {
+  let query = supabase.from('customers').select('*').order('created_at', { ascending: false });
+  if (type) query = query.eq('type', type);
+  const { data, error } = await query;
   if (error) throw error;
   return (data || []).map(c => ({
-    id: c.id, name: c.name, phone: c.phone, address: c.address, balance: Number(c.balance),
+    id: c.id, name: c.name, phone: c.phone, address: c.address,
+    balance: Number(c.balance), type: (c as any).type || 'buyer',
   }));
 }
 
 export async function saveCustomer(c: Omit<Customer, 'id'>): Promise<Customer> {
   const { data, error } = await supabase.from('customers').insert({
-    name: c.name, phone: c.phone, address: c.address, balance: c.balance,
+    name: c.name, phone: c.phone, address: c.address, balance: c.balance, type: c.type,
   }).select().single();
   if (error) throw error;
-  return { id: data.id, name: data.name, phone: data.phone, address: data.address, balance: Number(data.balance) };
+  return { id: data.id, name: data.name, phone: data.phone, address: data.address,
+    balance: Number(data.balance), type: (data as any).type || 'buyer' };
 }
 
 export async function updateCustomer(id: string, updates: Partial<Customer>): Promise<void> {
-  const { error } = await supabase.from('customers').update(updates).eq('id', id);
+  const dbUpdates: any = {};
+  if (updates.name !== undefined) dbUpdates.name = updates.name;
+  if (updates.phone !== undefined) dbUpdates.phone = updates.phone;
+  if (updates.address !== undefined) dbUpdates.address = updates.address;
+  if (updates.balance !== undefined) dbUpdates.balance = updates.balance;
+  if (updates.type !== undefined) dbUpdates.type = updates.type;
+  const { error } = await supabase.from('customers').update(dbUpdates).eq('id', id);
   if (error) throw error;
 }
 
@@ -134,6 +146,7 @@ export async function getInvoices(type?: Invoice['type']): Promise<Invoice[]> {
     const { data: itemsData } = await supabase.from('invoice_items').select('*').eq('invoice_id', inv.id);
     invoices.push({
       id: inv.id, type: inv.type as Invoice['type'], date: inv.date,
+      customerId: (inv as any).customer_id || undefined,
       customerName: inv.customer_name, total: Number(inv.total), discount: Number(inv.discount),
       netTotal: Number(inv.net_total), paid: Number(inv.paid), notes: inv.notes,
       items: (itemsData || []).map(i => ({
@@ -148,12 +161,12 @@ export async function getInvoices(type?: Invoice['type']): Promise<Invoice[]> {
 export async function saveInvoice(inv: Omit<Invoice, 'id'>): Promise<Invoice> {
   const { data, error } = await supabase.from('invoices').insert({
     type: inv.type, date: inv.date, customer_name: inv.customerName,
+    customer_id: inv.customerId || null,
     total: inv.total, discount: inv.discount, net_total: inv.netTotal,
     paid: inv.paid, notes: inv.notes,
   }).select().single();
   if (error) throw error;
 
-  // Insert items
   if (inv.items.length > 0) {
     const { error: itemsError } = await supabase.from('invoice_items').insert(
       inv.items.map(item => ({
@@ -180,6 +193,61 @@ export async function saveInvoice(inv: Omit<Invoice, 'id'>): Promise<Invoice> {
   }
 
   return { ...inv, id: data.id };
+}
+
+export async function updateInvoice(id: string, inv: Omit<Invoice, 'id'>): Promise<void> {
+  // Reverse old stock changes first
+  const { data: oldItems } = await supabase.from('invoice_items').select('*').eq('invoice_id', id);
+  const { data: oldInv } = await supabase.from('invoices').select('type').eq('id', id).single();
+  if (oldItems && oldInv) {
+    for (const item of oldItems) {
+      if (!item.product_id) continue;
+      const { data: product } = await supabase.from('products').select('stock').eq('id', item.product_id).single();
+      if (product) {
+        let newStock = product.stock;
+        if (oldInv.type === 'sale') newStock += item.quantity;
+        else if (oldInv.type === 'purchase') newStock -= item.quantity;
+        else if (oldInv.type === 'sale_return') newStock -= item.quantity;
+        else if (oldInv.type === 'purchase_return') newStock += item.quantity;
+        await supabase.from('products').update({ stock: newStock }).eq('id', item.product_id);
+      }
+    }
+  }
+
+  // Update invoice
+  const { error } = await supabase.from('invoices').update({
+    type: inv.type, date: inv.date, customer_name: inv.customerName,
+    customer_id: inv.customerId || null,
+    total: inv.total, discount: inv.discount, net_total: inv.netTotal,
+    paid: inv.paid, notes: inv.notes,
+  }).eq('id', id);
+  if (error) throw error;
+
+  // Delete old items and insert new
+  await supabase.from('invoice_items').delete().eq('invoice_id', id);
+  if (inv.items.length > 0) {
+    await supabase.from('invoice_items').insert(
+      inv.items.map(item => ({
+        invoice_id: id, product_id: item.productId || null,
+        product_name: item.productName, quantity: item.quantity,
+        price: item.price, total: item.total,
+      }))
+    );
+  }
+
+  // Apply new stock changes
+  for (const item of inv.items) {
+    if (!item.productId) continue;
+    const { data: product } = await supabase.from('products').select('stock').eq('id', item.productId).single();
+    if (product) {
+      let newStock = product.stock;
+      if (inv.type === 'sale') newStock -= item.quantity;
+      else if (inv.type === 'purchase') newStock += item.quantity;
+      else if (inv.type === 'sale_return') newStock += item.quantity;
+      else if (inv.type === 'purchase_return') newStock -= item.quantity;
+      await supabase.from('products').update({ stock: newStock }).eq('id', item.productId);
+    }
+  }
 }
 
 // ---- Expenses ----
@@ -239,8 +307,8 @@ export async function exportBackupCSV(): Promise<{ products: string; customers: 
   const productsCsv = "الاسم,الباركود,التصنيف,سعر الشراء,سعر البيع,المخزون,المقاس,اللون\n" +
     products.map(p => `${p.name},${p.barcode},${p.category},${p.buyPrice},${p.sellPrice},${p.stock},${p.size||''},${p.color||''}`).join('\n');
 
-  const customersCsv = "الاسم,الهاتف,العنوان,الرصيد\n" +
-    customers.map(c => `${c.name},${c.phone},${c.address},${c.balance}`).join('\n');
+  const customersCsv = "الاسم,النوع,الهاتف,العنوان,الرصيد\n" +
+    customers.map(c => `${c.name},${c.type === 'buyer' ? 'مشتري' : 'مورد'},${c.phone},${c.address},${c.balance}`).join('\n');
 
   const invoicesCsv = "النوع,التاريخ,العميل,الإجمالي,الخصم,الصافي,المدفوع,ملاحظات\n" +
     invoices.map(i => `${i.type},${i.date},${i.customerName},${i.total},${i.discount},${i.netTotal},${i.paid},${i.notes}`).join('\n');
