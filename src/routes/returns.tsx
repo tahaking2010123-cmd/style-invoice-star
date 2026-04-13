@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageLayout } from "@/components/PageLayout";
-import { getProducts, getCustomers, getInvoices, saveInvoice, type InvoiceItem, type Product, type Invoice, type Customer } from "@/lib/store";
+import { getProducts, getCustomers, getInvoices, saveInvoice, updateInvoice, type InvoiceItem, type Product, type Invoice, type Customer } from "@/lib/store";
 import { useState, useEffect, useCallback } from "react";
-import { Plus, RotateCcw, Trash2 } from "lucide-react";
+import { Plus, RotateCcw, Trash2, Pencil } from "lucide-react";
 
 export const Route = createFileRoute("/returns")({
   component: ReturnsPage,
@@ -12,8 +12,10 @@ function ReturnsPage() {
   const [saleReturns, setSaleReturns] = useState<Invoice[]>([]);
   const [purchaseReturns, setPurchaseReturns] = useState<Invoice[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [buyers, setBuyers] = useState<Customer[]>([]);
+  const [suppliers, setSuppliers] = useState<Customer[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [returnType, setReturnType] = useState<'sale_return' | 'purchase_return'>('sale_return');
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [customerId, setCustomerId] = useState("");
@@ -26,11 +28,11 @@ function ReturnsPage() {
 
   const loadData = useCallback(async () => {
     try {
-      const [p, c, sr, pr] = await Promise.all([
-        getProducts(), getCustomers(),
+      const [p, b, s, sr, pr] = await Promise.all([
+        getProducts(), getCustomers('buyer'), getCustomers('supplier'),
         getInvoices('sale_return' as any), getInvoices('purchase_return' as any),
       ]);
-      setProducts(p); setCustomers(c); setSaleReturns(sr); setPurchaseReturns(pr);
+      setProducts(p); setBuyers(b); setSuppliers(s); setSaleReturns(sr); setPurchaseReturns(pr);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   }, []);
@@ -38,6 +40,7 @@ function ReturnsPage() {
   useEffect(() => { loadData(); }, [loadData]);
 
   const total = items.reduce((sum, i) => sum + i.total, 0);
+  const currentCustomers = returnType === 'sale_return' ? buyers : suppliers;
 
   const addItem = () => {
     const product = products.find(p => p.id === selectedProduct);
@@ -48,8 +51,18 @@ function ReturnsPage() {
   };
 
   const openForm = (type: 'sale_return' | 'purchase_return') => {
-    setReturnType(type);
+    setReturnType(type); setEditingId(null);
     setItems([]); setCustomerId(""); setNotes(""); setError("");
+    setShowForm(true);
+  };
+
+  const openEdit = (inv: Invoice, type: 'sale_return' | 'purchase_return') => {
+    setReturnType(type); setEditingId(inv.id);
+    setItems(inv.items);
+    const list = type === 'sale_return' ? buyers : suppliers;
+    const customer = list.find(c => c.name === inv.customerName);
+    setCustomerId(customer?.id || "");
+    setNotes(inv.notes); setError("");
     setShowForm(true);
   };
 
@@ -57,17 +70,21 @@ function ReturnsPage() {
     if (!customerId) { setError("يجب اختيار العميل/المورد"); return; }
     if (items.length === 0) { setError("يجب إضافة منتج واحد على الأقل"); return; }
     setError("");
-    const customer = customers.find(c => c.id === customerId);
-    await saveInvoice({
+    const customer = currentCustomers.find(c => c.id === customerId);
+    const invoiceData = {
       type: returnType as any, date: new Date().toISOString().split('T')[0],
-      customerName: customer?.name || '', items, total, discount: 0, netTotal: total, paid: total, notes,
-    });
+      customerId, customerName: customer?.name || '', items, total, discount: 0, netTotal: total, paid: total, notes,
+    };
+    if (editingId) {
+      await updateInvoice(editingId, invoiceData);
+    } else {
+      await saveInvoice(invoiceData);
+    }
     await loadData();
-    setItems([]); setCustomerId(""); setNotes(""); setShowForm(false);
+    setItems([]); setCustomerId(""); setNotes(""); setEditingId(null); setShowForm(false);
   };
 
   const formatCurrency = (n: number) => n.toLocaleString('ar-EG') + ' ج.م';
-
   const currentReturns = activeTab === 'sale_return' ? saleReturns : purchaseReturns;
 
   return (
@@ -82,13 +99,13 @@ function ReturnsPage() {
       {showForm && (
         <div className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-sm flex items-center justify-center overflow-y-auto py-8" onClick={() => setShowForm(false)}>
           <div className="bg-card rounded-2xl border border-border p-8 w-full max-w-2xl shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h2 className="font-heading text-xl font-bold mb-6">{returnType === 'sale_return' ? 'مرتجع مبيعات' : 'مرتجع مشتريات'}</h2>
+            <h2 className="font-heading text-xl font-bold mb-6">{editingId ? 'تعديل' : ''} {returnType === 'sale_return' ? 'مرتجع مبيعات' : 'مرتجع مشتريات'}</h2>
             {error && <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-xl mb-4">{error}</div>}
             <div className="mb-4">
               <label className="text-sm text-muted-foreground mb-1 block">{returnType === 'sale_return' ? 'اسم العميل' : 'اسم المورد'} <span className="text-destructive">*</span></label>
               <select value={customerId} onChange={e => setCustomerId(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none">
                 <option value="">اختر...</option>
-                {customers.map(c => <option key={c.id} value={c.id}>{c.name} - {c.phone}</option>)}
+                {currentCustomers.map(c => <option key={c.id} value={c.id}>{c.name} - {c.phone}</option>)}
               </select>
             </div>
             <div className="flex gap-3 mb-4">
@@ -118,7 +135,7 @@ function ReturnsPage() {
             </div>
             <div className="mb-6"><label className="text-sm text-muted-foreground mb-1 block">سبب المرتجع</label><textarea value={notes} onChange={e => setNotes(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-input bg-background resize-none focus:ring-2 focus:ring-ring focus:outline-none" rows={2} /></div>
             <div className="flex gap-3">
-              <button onClick={handleSave} className="flex-1 bg-primary text-primary-foreground py-3 rounded-xl font-medium hover:bg-primary/90 transition-colors">حفظ</button>
+              <button onClick={handleSave} className="flex-1 bg-primary text-primary-foreground py-3 rounded-xl font-medium hover:bg-primary/90 transition-colors">{editingId ? 'تحديث' : 'حفظ'}</button>
               <button onClick={() => setShowForm(false)} className="flex-1 bg-secondary text-secondary-foreground py-3 rounded-xl font-medium hover:bg-secondary/80 transition-colors">إلغاء</button>
             </div>
           </div>
@@ -141,16 +158,18 @@ function ReturnsPage() {
             <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">{activeTab === 'sale_return' ? 'العميل' : 'المورد'}</th>
             <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">المبلغ</th>
             <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">السبب</th>
+            <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">تعديل</th>
           </tr></thead>
           <tbody>
             {currentReturns.length === 0 ? (
-              <tr><td colSpan={4} className="text-center py-12 text-muted-foreground"><RotateCcw className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />{loading ? 'جاري التحميل...' : 'لا توجد مرتجعات'}</td></tr>
+              <tr><td colSpan={5} className="text-center py-12 text-muted-foreground"><RotateCcw className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />{loading ? 'جاري التحميل...' : 'لا توجد مرتجعات'}</td></tr>
             ) : currentReturns.map(r => (
               <tr key={r.id} className="border-b border-border hover:bg-muted/30 transition-colors">
                 <td className="px-6 py-4 text-sm">{r.date}</td>
                 <td className="px-6 py-4 text-sm font-medium">{r.customerName}</td>
                 <td className="px-6 py-4 text-sm font-semibold text-warning">{formatCurrency(r.netTotal)}</td>
                 <td className="px-6 py-4 text-sm text-muted-foreground">{r.notes}</td>
+                <td className="px-6 py-4"><button onClick={() => openEdit(r, activeTab)} className="text-primary hover:bg-primary/10 p-2 rounded-lg transition-colors"><Pencil className="w-4 h-4" /></button></td>
               </tr>
             ))}
           </tbody>
