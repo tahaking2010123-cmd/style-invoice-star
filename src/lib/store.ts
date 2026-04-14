@@ -52,10 +52,6 @@ export interface Expense {
   amount: number;
 }
 
-function generateBarcode(): string {
-  return Math.floor(1000000000000 + Math.random() * 9000000000000).toString();
-}
-
 // ---- Products ----
 export async function getProducts(): Promise<Product[]> {
   const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
@@ -134,6 +130,32 @@ export async function deleteCustomer(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// ---- Helper: Update customer balance ----
+async function adjustCustomerBalance(customerId: string | undefined, amount: number): Promise<void> {
+  if (!customerId) return;
+  const { data: customer } = await supabase.from('customers').select('balance').eq('id', customerId).single();
+  if (customer) {
+    const newBalance = Number(customer.balance) + amount;
+    await supabase.from('customers').update({ balance: newBalance }).eq('id', customerId);
+  }
+}
+
+// Balance logic:
+// sale: customer owes us (netTotal - paid) → balance increases (positive = owes us)
+// purchase: we owe supplier (netTotal - paid) → balance decreases (negative = we owe them)
+// sale_return: we owe customer back → balance decreases
+// purchase_return: supplier owes us back → balance increases
+function getBalanceChange(type: Invoice['type'], netTotal: number, paid: number): number {
+  const remaining = netTotal - paid;
+  switch (type) {
+    case 'sale': return remaining; // customer owes us
+    case 'purchase': return -remaining; // we owe supplier
+    case 'sale_return': return -netTotal; // we owe customer back
+    case 'purchase_return': return netTotal; // supplier owes us back
+    default: return 0;
+  }
+}
+
 // ---- Invoices ----
 export async function getInvoices(type?: Invoice['type']): Promise<Invoice[]> {
   let query = supabase.from('invoices').select('*').order('created_at', { ascending: false });
@@ -192,24 +214,40 @@ export async function saveInvoice(inv: Omit<Invoice, 'id'>): Promise<Invoice> {
     }
   }
 
+  // Update customer balance
+  const balanceChange = getBalanceChange(inv.type, inv.netTotal, inv.paid);
+  await adjustCustomerBalance(inv.customerId, balanceChange);
+
   return { ...inv, id: data.id };
 }
 
 export async function updateInvoice(id: string, inv: Omit<Invoice, 'id'>): Promise<void> {
-  // Reverse old stock changes first
+  // Get old invoice data to reverse balance & stock
+  const { data: oldInv } = await supabase.from('invoices').select('*').eq('id', id).single();
   const { data: oldItems } = await supabase.from('invoice_items').select('*').eq('invoice_id', id);
-  const { data: oldInv } = await supabase.from('invoices').select('type').eq('id', id).single();
-  if (oldItems && oldInv) {
-    for (const item of oldItems) {
-      if (!item.product_id) continue;
-      const { data: product } = await supabase.from('products').select('stock').eq('id', item.product_id).single();
-      if (product) {
-        let newStock = product.stock;
-        if (oldInv.type === 'sale') newStock += item.quantity;
-        else if (oldInv.type === 'purchase') newStock -= item.quantity;
-        else if (oldInv.type === 'sale_return') newStock -= item.quantity;
-        else if (oldInv.type === 'purchase_return') newStock += item.quantity;
-        await supabase.from('products').update({ stock: newStock }).eq('id', item.product_id);
+  
+  if (oldInv) {
+    // Reverse old customer balance
+    const oldBalanceChange = getBalanceChange(
+      oldInv.type as Invoice['type'], 
+      Number(oldInv.net_total), 
+      Number(oldInv.paid)
+    );
+    await adjustCustomerBalance((oldInv as any).customer_id, -oldBalanceChange);
+
+    // Reverse old stock changes
+    if (oldItems) {
+      for (const item of oldItems) {
+        if (!item.product_id) continue;
+        const { data: product } = await supabase.from('products').select('stock').eq('id', item.product_id).single();
+        if (product) {
+          let newStock = product.stock;
+          if (oldInv.type === 'sale') newStock += item.quantity;
+          else if (oldInv.type === 'purchase') newStock -= item.quantity;
+          else if (oldInv.type === 'sale_return') newStock -= item.quantity;
+          else if (oldInv.type === 'purchase_return') newStock += item.quantity;
+          await supabase.from('products').update({ stock: newStock }).eq('id', item.product_id);
+        }
       }
     }
   }
@@ -248,6 +286,10 @@ export async function updateInvoice(id: string, inv: Omit<Invoice, 'id'>): Promi
       await supabase.from('products').update({ stock: newStock }).eq('id', item.productId);
     }
   }
+
+  // Apply new customer balance
+  const newBalanceChange = getBalanceChange(inv.type, inv.netTotal, inv.paid);
+  await adjustCustomerBalance(inv.customerId, newBalanceChange);
 }
 
 // ---- Expenses ----
