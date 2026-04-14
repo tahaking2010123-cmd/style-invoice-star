@@ -27,8 +27,8 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "نظام محاسبة محل الأناقة" },
-      { name: "description", content: "نظام محاسبة وفواتير متكامل لمحلات الملابس" },
+      { title: "المدير - نظام الإدارة والمحاسبة" },
+      { name: "description", content: "نظام إدارة ومحاسبة متكامل" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },

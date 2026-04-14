@@ -51,7 +51,7 @@ function Dashboard() {
   );
 
   return (
-    <PageLayout title="لوحة التحكم" subtitle="نظرة عامة على أداء المحل"
+    <PageLayout title="لوحة التحكم" subtitle="نظرة عامة على الأداء"
       actions={
         <button onClick={handleBackup} className="flex items-center gap-2 bg-accent text-accent-foreground px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-accent/90 transition-colors">
           <Download className="w-4 h-4" /> نسخة احتياطية
