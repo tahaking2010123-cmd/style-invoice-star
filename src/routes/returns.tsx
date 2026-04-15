@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageLayout } from "@/components/PageLayout";
 import { getProducts, getCustomers, getInvoices, saveInvoice, updateInvoice, type InvoiceItem, type Product, type Invoice, type Customer } from "@/lib/store";
+import { printInvoice } from "@/lib/print-utils";
 import { useState, useEffect, useCallback } from "react";
-import { Plus, RotateCcw, Trash2, Pencil } from "lucide-react";
+import { Plus, RotateCcw, Trash2, Pencil, Printer } from "lucide-react";
 
 export const Route = createFileRoute("/returns")({
   component: ReturnsPage,
@@ -169,7 +170,10 @@ function ReturnsPage() {
                 <td className="px-6 py-4 text-sm font-medium">{r.customerName}</td>
                 <td className="px-6 py-4 text-sm font-semibold text-warning">{formatCurrency(r.netTotal)}</td>
                 <td className="px-6 py-4 text-sm text-muted-foreground">{r.notes}</td>
-                <td className="px-6 py-4"><button onClick={() => openEdit(r, activeTab)} className="text-primary hover:bg-primary/10 p-2 rounded-lg transition-colors"><Pencil className="w-4 h-4" /></button></td>
+                <td className="px-6 py-4 flex items-center gap-1">
+                  <button onClick={() => printInvoice(r, activeTab)} className="text-accent-foreground hover:bg-accent/10 p-2 rounded-lg transition-colors" title="طباعة"><Printer className="w-4 h-4" /></button>
+                  <button onClick={() => openEdit(r, activeTab)} className="text-primary hover:bg-primary/10 p-2 rounded-lg transition-colors"><Pencil className="w-4 h-4" /></button>
+                </td>
               </tr>
             ))}
           </tbody>

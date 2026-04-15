@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageLayout } from "@/components/PageLayout";
 import { getProducts, getCustomers, getInvoices, saveInvoice, updateInvoice, type InvoiceItem, type Product, type Invoice, type Customer } from "@/lib/store";
+import { printInvoice } from "@/lib/print-utils";
 import { useState, useEffect, useCallback } from "react";
-import { Plus, FileText, Trash2, Pencil } from "lucide-react";
+import { Plus, FileText, Trash2, Pencil, Printer } from "lucide-react";
 
 export const Route = createFileRoute("/purchases")({
   component: PurchasesPage,
@@ -147,7 +148,7 @@ function PurchasesPage() {
             <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">المورد</th>
             <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">الصافي</th>
             <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">المدفوع</th>
-            <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">تعديل</th>
+            <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">إجراءات</th>
           </tr></thead>
           <tbody>
             {invoices.length === 0 ? (
@@ -159,7 +160,10 @@ function PurchasesPage() {
                 <td className="px-6 py-4 text-sm font-medium">{inv.customerName}</td>
                 <td className="px-6 py-4 text-sm font-semibold text-primary">{formatCurrency(inv.netTotal)}</td>
                 <td className="px-6 py-4 text-sm">{formatCurrency(inv.paid)}</td>
-                <td className="px-6 py-4"><button onClick={() => openEdit(inv)} className="text-primary hover:bg-primary/10 p-2 rounded-lg transition-colors"><Pencil className="w-4 h-4" /></button></td>
+                <td className="px-6 py-4 flex items-center gap-1">
+                  <button onClick={() => printInvoice(inv, 'purchase')} className="text-accent-foreground hover:bg-accent/10 p-2 rounded-lg transition-colors" title="طباعة"><Printer className="w-4 h-4" /></button>
+                  <button onClick={() => openEdit(inv)} className="text-primary hover:bg-primary/10 p-2 rounded-lg transition-colors"><Pencil className="w-4 h-4" /></button>
+                </td>
               </tr>
             ))}
           </tbody>

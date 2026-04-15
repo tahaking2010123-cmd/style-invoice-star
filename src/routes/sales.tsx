@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageLayout } from "@/components/PageLayout";
 import { getProducts, getCustomers, getInvoices, saveInvoice, updateInvoice, type InvoiceItem, type Product, type Invoice, type Customer } from "@/lib/store";
+import { printInvoice } from "@/lib/print-utils";
 import { useState, useEffect, useCallback } from "react";
-import { Plus, FileText, Trash2, Pencil } from "lucide-react";
+import { Plus, FileText, Trash2, Pencil, Printer } from "lucide-react";
 
 export const Route = createFileRoute("/sales")({
   component: SalesPage,
@@ -145,25 +146,24 @@ function SalesPage() {
             <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">رقم الفاتورة</th>
             <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">التاريخ</th>
             <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">العميل</th>
-            <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">الإجمالي</th>
-            <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">الخصم</th>
             <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">الصافي</th>
             <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">المدفوع</th>
-            <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">تعديل</th>
+            <th className="text-right px-6 py-4 text-sm font-semibold text-muted-foreground">إجراءات</th>
           </tr></thead>
           <tbody>
             {invoices.length === 0 ? (
-              <tr><td colSpan={8} className="text-center py-12 text-muted-foreground"><FileText className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />{loading ? 'جاري التحميل...' : 'لا توجد فواتير بعد'}</td></tr>
+              <tr><td colSpan={6} className="text-center py-12 text-muted-foreground"><FileText className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />{loading ? 'جاري التحميل...' : 'لا توجد فواتير بعد'}</td></tr>
             ) : invoices.map(inv => (
               <tr key={inv.id} className="border-b border-border hover:bg-muted/30 transition-colors">
                 <td className="px-6 py-4 text-sm font-mono">{inv.id.slice(0, 8)}</td>
                 <td className="px-6 py-4 text-sm">{inv.date}</td>
                 <td className="px-6 py-4 text-sm font-medium">{inv.customerName || 'نقدي'}</td>
-                <td className="px-6 py-4 text-sm">{formatCurrency(inv.total)}</td>
-                <td className="px-6 py-4 text-sm">{formatCurrency(inv.discount)}</td>
                 <td className="px-6 py-4 text-sm font-semibold text-primary">{formatCurrency(inv.netTotal)}</td>
                 <td className="px-6 py-4 text-sm">{formatCurrency(inv.paid)}</td>
-                <td className="px-6 py-4"><button onClick={() => openEdit(inv)} className="text-primary hover:bg-primary/10 p-2 rounded-lg transition-colors"><Pencil className="w-4 h-4" /></button></td>
+                <td className="px-6 py-4 flex items-center gap-1">
+                  <button onClick={() => printInvoice(inv, 'sale')} className="text-accent-foreground hover:bg-accent/10 p-2 rounded-lg transition-colors" title="طباعة"><Printer className="w-4 h-4" /></button>
+                  <button onClick={() => openEdit(inv)} className="text-primary hover:bg-primary/10 p-2 rounded-lg transition-colors"><Pencil className="w-4 h-4" /></button>
+                </td>
               </tr>
             ))}
           </tbody>
