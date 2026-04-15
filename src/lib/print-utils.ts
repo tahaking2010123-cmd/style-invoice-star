@@ -10,24 +10,6 @@ const PRINTER_SETTINGS = {
 };
 
 export function printBarcodeLabel(product: Product, quantity: number = 1) {
-  const canvas = document.createElement('canvas');
-  try {
-    JsBarcode(canvas, product.barcode, {
-      format: 'CODE128',
-      width: 2,
-      height: 50,
-      displayValue: true,
-      fontSize: 14,
-      margin: 5,
-      textMargin: 2,
-    });
-  } catch {
-    alert('خطأ في إنشاء الباركود');
-    return;
-  }
-
-  const barcodeDataUrl = canvas.toDataURL('image/png');
-
   const labels = Array.from({ length: quantity }, () => `
     <div style="
       width: ${PRINTER_SETTINGS.labelWidth}mm;
@@ -37,16 +19,13 @@ export function printBarcodeLabel(product: Product, quantity: number = 1) {
       align-items: center;
       justify-content: center;
       page-break-after: always;
-      padding: 2mm;
+      padding: 1mm 2mm;
       box-sizing: border-box;
     ">
-      <div style="font-size: 10px; font-weight: bold; text-align: center; margin-bottom: 2px; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
-        ${product.name}
-      </div>
-      <img src="${barcodeDataUrl}" style="max-width: 100%; height: auto;" />
-      <div style="font-size: 11px; font-weight: bold; margin-top: 2px;">
-        ${product.sellPrice.toLocaleString('ar-EG')} ج.م
-      </div>
+      <div style="font-size: 13px; font-weight: bold; text-align: center; margin-bottom: 1px;">سنتر المدير</div>
+      <div style="font-size: 15px; font-weight: bold; text-align: center; margin-bottom: 1px;">${product.sellPrice.toLocaleString('ar-EG')} ج.م</div>
+      <div style="font-size: 11px; font-weight: bold; text-align: center; margin-bottom: 1px; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">${product.name}</div>
+      <div style="font-size: 10px; text-align: center; letter-spacing: 1px;">${product.barcode}</div>
     </div>
   `).join('');
 
