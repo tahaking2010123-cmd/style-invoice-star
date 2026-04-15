@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageLayout } from "@/components/PageLayout";
 import { getProducts, getCustomers, getInvoices, saveInvoice, updateInvoice, type InvoiceItem, type Product, type Invoice, type Customer } from "@/lib/store";
+import { printInvoice } from "@/lib/print-utils";
 import { useState, useEffect, useCallback } from "react";
-import { Plus, RotateCcw, Trash2, Pencil } from "lucide-react";
+import { Plus, RotateCcw, Trash2, Pencil, Printer } from "lucide-react";
 
 export const Route = createFileRoute("/returns")({
   component: ReturnsPage,
